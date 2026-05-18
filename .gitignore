@@ -1,0 +1,27 @@
+# Large binary / media files
+*.zip
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Frame image sequences
+vedio1/
+portfolio/public/frames/
+portfolio/public/frames2/
+
+# Resume PDF (personal data)
+*.pdf
+
+# Node modules & build output
+portfolio/node_modules/
+portfolio/dist/
+portfolio/dist-ssr/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
