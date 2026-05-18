@@ -1,12 +1,12 @@
-# Large binary / media files
+# Large binary / media files (raw sources)
 *.zip
-*.mp4
-*.mov
 *.avi
 *.mkv
 
-# Frame image sequences
+# Raw video source folder
 vedio1/
+
+# Frame image sequences (too large for git)
 portfolio/public/frames/
 portfolio/public/frames2/
 
