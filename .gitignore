@@ -9,6 +9,8 @@ vedio1/
 # Frame image sequences (too large for git)
 portfolio/public/frames/
 portfolio/public/frames2/
+!portfolio/public/frames_opt/
+!portfolio/public/frames2_opt/
 
 # Resume PDF (personal data)
 *.pdf

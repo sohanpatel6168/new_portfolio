@@ -1,163 +1,133 @@
-import { useEffect, useRef } from 'react';
-import { useScroll, useMotionValueEvent } from 'motion/react';
-
-// ─── Sequence 1: public/frames/ ───────────────────────────────────────────────
-// Files: frame_000_delay-0.066s.png … frame_120_delay-0.066s.png  (121 frames)
-const SEQ1_COUNT = 121;
-const SEQ1_FIRST = 0;
-function seq1Url(i: number) {
-  return `/frames/frame_${String(i).padStart(3, '0')}_delay-0.066s.png`;
-}
-
-// ─── Sequence 2: public/frames2/ ──────────────────────────────────────────────
-// Files: frame_001.png … frame_120.png  (120 frames)
-const SEQ2_COUNT = 120;
-const SEQ2_FIRST = 1;
-function seq2Url(i: number) {
-  return `/frames2/frame_${String(i).padStart(3, '0')}.png`;
-}
-
-function preloadImages(urls: string[]): Promise<HTMLImageElement[]> {
-  return Promise.all(
-    urls.map(
-      (src) =>
-        new Promise<HTMLImageElement>((resolve) => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.onerror = () => resolve(img); // still resolve so we don't stall
-          img.src = src;
-        })
-    )
-  );
-}
+import { useEffect, useRef, useState } from 'react';
+import { useScroll } from 'motion/react';
 
 export default function GlobalVideoBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const frames1 = useRef<HTMLImageElement[]>([]);
-  const frames2 = useRef<HTMLImageElement[]>([]);
-  const loaded1 = useRef(false);
-  const loaded2 = useRef(false);
-  const currentSeq = useRef<1 | 2>(1);
-  const lastIndex = useRef(-1);
-
   const { scrollYProgress } = useScroll();
 
-  // ── Draw helper ──────────────────────────────────────────────────────────────
-  function drawFrame(img: HTMLImageElement | undefined) {
+  const [images, setImages] = useState<HTMLImageElement[]>([]);
+  const [images2, setImages2] = useState<HTMLImageElement[]>([]);
+  const FRAME_COUNT_1 = 121;
+  const FRAME_COUNT_2 = 120; // Extracted 120 frames from video 2
+
+  // Load images
+  useEffect(() => {
+    // Preload frames for sequence 1
+    const loadedImages1: HTMLImageElement[] = [];
+    for (let i = 0; i < FRAME_COUNT_1; i++) {
+      const img = new Image();
+      const paddedIndex = i.toString().padStart(3, '0');
+      img.src = `/frames_opt/frame_${paddedIndex}_delay-0.066s.jpg`;
+      loadedImages1.push(img);
+    }
+    setImages(loadedImages1);
+
+    // Preload frames for sequence 2
+    const loadedImages2: HTMLImageElement[] = [];
+    // The extracted frames start at 001
+    for (let i = 1; i <= FRAME_COUNT_2; i++) {
+      const img = new Image();
+      const paddedIndex = i.toString().padStart(3, '0');
+      img.src = `/frames2_opt/frame_${paddedIndex}.jpg`;
+      loadedImages2.push(img);
+    }
+    setImages2(loadedImages2);
+  }, []);
+
+  // Handle Resize and drawing
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !img || !img.naturalWidth) return;
+    if (!canvas || images.length === 0 || images2.length === 0) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Keep canvas resolution in sync with window
-    if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
+    let animationFrameId: number;
+    let width = window.innerWidth;
+    let height = window.innerHeight;
 
-    // Cover-fit the image
-    const cw = canvas.width;
-    const ch = canvas.height;
-    const iw = img.naturalWidth;
-    const ih = img.naturalHeight;
-    const scale = Math.max(cw / iw, ch / ih);
-    const sw = iw * scale;
-    const sh = ih * scale;
-    const dx = (cw - sw) / 2;
-    const dy = (ch - sh) / 2;
-
-    ctx.clearRect(0, 0, cw, ch);
-    ctx.drawImage(img, dx, dy, sw, sh);
-  }
-
-  // ── Preload sequences ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const urls1 = Array.from({ length: SEQ1_COUNT }, (_, i) =>
-      seq1Url(i + SEQ1_FIRST)
-    );
-    const urls2 = Array.from({ length: SEQ2_COUNT }, (_, i) =>
-      seq2Url(i + SEQ2_FIRST)
-    );
-
-    // Draw first frame immediately so canvas isn't blank
-    const firstImg = new Image();
-    firstImg.onload = () => drawFrame(firstImg);
-    firstImg.src = urls1[0];
-
-    preloadImages(urls1).then((imgs) => {
-      frames1.current = imgs;
-      loaded1.current = true;
-      // Re-draw at current scroll position once loaded
-      drawFrame(imgs[lastIndex.current >= 0 ? lastIndex.current : 0]);
-    });
-
-    preloadImages(urls2).then((imgs) => {
-      frames2.current = imgs;
-      loaded2.current = true;
-    });
-
-    // Resize handler
-    const onResize = () => {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      }
-      // Re-draw after resize
-      const seq = currentSeq.current;
-      const idx = lastIndex.current;
-      if (seq === 1 && loaded1.current) {
-        drawFrame(frames1.current[idx >= 0 ? idx : 0]);
-      } else if (seq === 2 && loaded2.current) {
-        drawFrame(frames2.current[idx >= 0 ? idx : 0]);
-      }
+    const resize = () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
     };
 
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    window.addEventListener('resize', resize);
+    resize();
 
-  // ── Scroll → frame ───────────────────────────────────────────────────────────
-  useMotionValueEvent(scrollYProgress, 'change', (p) => {
-    if (p <= 0.5) {
-      // Sequence 1
-      currentSeq.current = 1;
-      if (!loaded1.current) return;
-      const idx = Math.min(
-        Math.round((p / 0.5) * (SEQ1_COUNT - 1)),
-        SEQ1_COUNT - 1
-      );
-      if (idx === lastIndex.current && currentSeq.current === 1) return;
-      lastIndex.current = idx;
-      drawFrame(frames1.current[idx]);
-    } else {
-      // Sequence 2
-      currentSeq.current = 2;
-      if (!loaded2.current) return;
-      const idx = Math.min(
-        Math.round(((p - 0.5) / 0.5) * (SEQ2_COUNT - 1)),
-        SEQ2_COUNT - 1
-      );
-      if (idx === lastIndex.current && currentSeq.current === 2) return;
-      lastIndex.current = idx;
-      drawFrame(frames2.current[idx]);
-    }
-  });
+    const drawCover = (source: CanvasImageSource, sourceWidth: number, sourceHeight: number) => {
+      if (!sourceWidth || !sourceHeight) return;
+      const sourceRatio = sourceWidth / sourceHeight;
+      const windowRatio = width / height;
+      
+      let drawWidth = width;
+      let drawHeight = height;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      if (windowRatio > sourceRatio) {
+        drawHeight = width / sourceRatio;
+        offsetY = (height - drawHeight) / 2;
+      } else {
+        drawWidth = height * sourceRatio;
+        offsetX = (width - drawWidth) / 2;
+      }
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(source, offsetX, offsetY, drawWidth, drawHeight);
+    };
+
+    const render = () => {
+      const p = scrollYProgress.get();
+      
+      if (p <= 0.5) {
+        // Map 0 - 0.5 to image sequence 1
+        const imgProgress = p * 2; // 0 to 1
+        const frameIndex = Math.min(
+          FRAME_COUNT_1 - 1,
+          Math.max(0, Math.floor(imgProgress * FRAME_COUNT_1))
+        );
+        const currentImg = images[frameIndex];
+        
+        // Use image if fully complete, or fallback to first frame if not ready yet
+        if (currentImg && currentImg.complete) {
+          drawCover(currentImg, currentImg.naturalWidth, currentImg.naturalHeight);
+        } else if (images[0] && images[0].complete) {
+          drawCover(images[0], images[0].naturalWidth, images[0].naturalHeight);
+        }
+      } else {
+        // Map 0.5 - 1.0 to image sequence 2
+        const imgProgress2 = (p - 0.5) * 2; // 0 to 1
+        const frameIndex2 = Math.min(
+          FRAME_COUNT_2 - 1,
+          Math.max(0, Math.floor(imgProgress2 * FRAME_COUNT_2))
+        );
+        const currentImg2 = images2[frameIndex2];
+        
+        if (currentImg2 && currentImg2.complete) {
+          drawCover(currentImg2, currentImg2.naturalWidth, currentImg2.naturalHeight);
+        } else if (images2[0] && images2[0].complete) {
+          drawCover(images2[0], images2[0].naturalWidth, images2[0].naturalHeight);
+        } else if (images[FRAME_COUNT_1 - 1] && images[FRAME_COUNT_1 - 1].complete) {
+          drawCover(images[FRAME_COUNT_1 - 1], images[FRAME_COUNT_1 - 1].naturalWidth, images[FRAME_COUNT_1 - 1].naturalHeight);
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [images, images2, scrollYProgress]);
 
   return (
     <canvas
       ref={canvasRef}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        zIndex: -1,
-        pointerEvents: 'none',
-        display: 'block',
-      }}
+      className="fixed top-0 left-0 w-full h-full z-[-1] pointer-events-none"
     />
   );
 }
